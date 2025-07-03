@@ -12,13 +12,13 @@ const stages = [
 ];
 
 export default function CICDGenerator() {
-  const [selectedStages, setSelectedStages] = useState({});
-  const [yamlOutput, setYamlOutput] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [selectedStages, setSelectedStages] = useState<Record<string, string | null>>({});
+  const [yamlOutput, setYamlOutput] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(false);
 
   const openRouterKey = import.meta.env.VITE_OPENROUTER_API_KEY;
 
-  const handleStageChange = (stageName, value) => {
+  const handleStageChange = (stageName:string, value: string | null) => {
     setSelectedStages((prev) => ({
       ...prev,
       [stageName]: value,
