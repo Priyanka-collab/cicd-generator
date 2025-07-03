@@ -1,28 +1,41 @@
 import React, { useState } from "react";
+import "./styles.css";
 
 const stages = [
-  { name: "Build", options: ["Maven", "Gradle", "npm", "pip"] },
-  { name: "Test" },
+  { name: "Checkout Repo" },
+  { name: "Install Dependencies", options: ["npm", "pip", "Maven", "Gradle"] },
+  { name: "Linting", options: ["ESLint", "Flake8"] },
+  { name: "Unit Test" },
+  { name: "Integration Test" },
   { name: "SonarQube Scan" },
+  { name: "Secrets Scan", options: ["Gitleaks", "TruffleHog"] },
+  { name: "Dependency Scan", options: ["OWASP", "Snyk"] },
   { name: "Docker Build & Push" },
-  { name: "SAST Scan" },
-  { name: "DAST Scan" },
+  { name: "Helm Deploy" },
+  { name: "Serverless Deploy", options: ["AWS Lambda", "Azure Functions", "GCP Cloud Functions"] },
   { name: "Manual Approval" },
-  { name: "Deploy", options: ["Kubernetes", "OpenShift", "AWS"] },
+  { name: "Deploy", options: ["Kubernetes", "OpenShift", "AWS EC2", "Azure Web App"] },
+  { name: "Slack Notification" },
 ];
 
 export default function CICDGenerator() {
   const [selectedStages, setSelectedStages] = useState<Record<string, string | null>>({});
-  const [yamlOutput, setYamlOutput] = useState<string>("");
-  const [loading, setLoading] = useState<boolean>(false);
+  const [yamlOutput, setYamlOutput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
 
   const openRouterKey = import.meta.env.VITE_OPENROUTER_API_KEY;
 
-  const handleStageChange = (stageName:string, value: string | null) => {
+  const handleStageChange = (stageName: string, value: string | null) => {
     setSelectedStages((prev) => ({
       ...prev,
       [stageName]: value,
     }));
+  };
+
+  const toggleDarkMode = () => {
+    setDarkMode((prev) => !prev);
+    document.documentElement.classList.toggle("dark", !darkMode);
   };
 
   const generateYAML = async () => {
@@ -32,9 +45,21 @@ export default function CICDGenerator() {
     }
 
     setLoading(true);
-    const prompt = `Generate a GitLab CI YAML pipeline with the following configuration:\n\n${Object.entries(selectedStages)
-      .map(([stage, value]) => `${stage}: ${value}`)
-      .join("\n")}\n\nOnly return valid .gitlab-ci.yml content.`;
+    const prompt = `
+Act as a DevOps engineer.
+
+Create a complete .gitlab-ci.yml file with:
+- Full job scripts (npm, mvn, sonar, docker, k8s, etc.)
+- Shell commands per job
+- Caching where appropriate
+- Parallel execution where possible
+- YAML only as output
+
+Inputs:
+${Object.entries(selectedStages)
+      .map(([stage, tool]) => `- ${stage}: ${tool}`)
+      .join("\n")}
+`;
 
     try {
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -44,13 +69,12 @@ export default function CICDGenerator() {
           Authorization: `Bearer ${openRouterKey}`,
         },
         body: JSON.stringify({
-          model: "mistralai/mistral-7b-instruct", // free model on OpenRouter
+          model: "mistralai/mistral-7b-instruct",
           messages: [{ role: "user", content: prompt }],
         }),
       });
 
       const data = await response.json();
-      console.log("OpenRouter Response:", data);
 
       if (response.status !== 200 || data.error) {
         const errorMsg = data?.error?.message || "Something went wrong.";
@@ -76,19 +100,26 @@ export default function CICDGenerator() {
     element.click();
   };
 
-  return (
-    <div style={{ padding: "2rem", maxWidth: "800px", margin: "auto" }}>
-      <h1 style={{ fontSize: "2rem", fontWeight: "bold", marginBottom: "1rem" }}>
-        CI/CD Pipeline Generator
-      </h1>
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(yamlOutput);
+  };
 
-      <div style={{ border: "1px solid #ccc", padding: "1rem", borderRadius: "8px" }}>
+  return (
+    <div className={`container ${darkMode ? "dark" : ""}`}>
+      <div className="toggle-theme">
+        <label>
+          <input type="checkbox" checked={darkMode} onChange={toggleDarkMode} /> Toggle Dark Mode
+        </label>
+      </div>
+
+      {/* Left side: Stage selection */}
+      <div className="panel">
+        <h1 className="title">CI/CD Pipeline Generator</h1>
         {stages.map((stage) => (
-          <div key={stage.name} style={{ marginBottom: "1rem" }}>
-            <label style={{ fontWeight: "500" }}>
+          <div key={stage.name} className="stage">
+            <label>
               <input
                 type="checkbox"
-                style={{ marginRight: "0.5rem" }}
                 onChange={(e) =>
                   handleStageChange(stage.name, e.target.checked ? stage.options?.[0] || "Enabled" : null)
                 }
@@ -97,9 +128,8 @@ export default function CICDGenerator() {
             </label>
             {selectedStages[stage.name] && stage.options && (
               <select
-                style={{ marginLeft: "1rem", padding: "0.3rem", borderRadius: "4px" }}
                 onChange={(e) => handleStageChange(stage.name, e.target.value)}
-                value={selectedStages[stage.name]}
+                value={selectedStages[stage.name] || ""}
               >
                 {stage.options.map((opt) => (
                   <option key={opt} value={opt}>
@@ -110,47 +140,29 @@ export default function CICDGenerator() {
             )}
           </div>
         ))}
-        <button
-          onClick={generateYAML}
-          disabled={loading}
-          style={{
-            backgroundColor: "#2563eb",
-            color: "white",
-            padding: "0.5rem 1rem",
-            borderRadius: "4px",
-            border: "none",
-            cursor: "pointer",
-          }}
-        >
+        <button className="btn-generate" onClick={generateYAML} disabled={loading}>
           {loading ? "Generating..." : "Generate YAML"}
         </button>
       </div>
 
-      <div style={{ marginTop: "2rem" }}>
-        <h2 style={{ fontSize: "1.25rem", fontWeight: "bold", marginBottom: "0.5rem" }}>
-          Generated .gitlab-ci.yml
-        </h2>
+      {/* Right side: YAML output */}
+      <div className="panel output">
+        <h2 className="subtitle">Generated .gitlab-ci.yml</h2>
         <textarea
-          rows={20}
+          rows={30}
           value={yamlOutput}
           readOnly
-          style={{ width: "100%", fontFamily: "monospace", fontSize: "0.875rem", padding: "1rem" }}
+          className="textarea"
         />
         {yamlOutput && (
-          <button
-            onClick={downloadYAML}
-            style={{
-              marginTop: "1rem",
-              backgroundColor: "#10b981",
-              color: "white",
-              padding: "0.5rem 1rem",
-              borderRadius: "4px",
-              border: "none",
-              cursor: "pointer",
-            }}
-          >
-            Download YAML
-          </button>
+          <div className="actions">
+            <button className="btn-copy" onClick={copyToClipboard}>
+              Copy YAML
+            </button>
+            <button className="btn-download" onClick={downloadYAML}>
+              Download YAML
+            </button>
+          </div>
         )}
       </div>
     </div>
